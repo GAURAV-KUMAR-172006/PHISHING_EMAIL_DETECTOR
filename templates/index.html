@@ -90,6 +90,12 @@
             box-shadow: 0 6px 12px rgba(0,0,0,0.15);
         }
 
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         #result {
             margin-top: 30px;
             padding: 25px;
@@ -175,6 +181,21 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -182,6 +203,30 @@
 
         .fade-in {
             animation: fadeIn 0.5s ease-out;
+        }
+
+        .risk-level {
+            font-size: 1.2em;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .risk-high {
+            background-color: #ffe6e6;
+            color: var(--danger-color);
+        }
+
+        .risk-medium {
+            background-color: #fff3e6;
+            color: var(--warning-color);
+        }
+
+        .risk-low {
+            background-color: #e6ffe6;
+            color: var(--success-color);
         }
     </style>
 </head>
@@ -196,7 +241,9 @@
                     <label for="emailText" class="form-label" style="color: var(--text-color); font-weight: 500;">Enter Email Text:</label>
                     <textarea class="form-control" id="emailText" rows="5" required placeholder="Paste your email content here..."></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary">Analyze Email</button>
+                <button type="submit" class="btn btn-primary">
+                    <span class="button-text">Analyze Email</span>
+                </button>
             </form>
 
             <div id="result" class="alert fade-in">
@@ -211,8 +258,19 @@
         e.preventDefault();
         const emailText = document.getElementById('emailText').value;
         const resultDiv = document.getElementById('result');
+        const submitButton = document.querySelector('button[type="submit"]');
+        const buttonText = submitButton.querySelector('.button-text');
+        
+        // Show loading state
+        submitButton.disabled = true;
+        buttonText.innerHTML = '<span class="loading-spinner"></span>Analyzing...';
+        resultDiv.style.display = 'none';
         
         try {
+            if (!emailText.trim()) {
+                throw new Error('Please enter some email text to analyze');
+            }
+
             const response = await fetch('/predict', {
                 method: 'POST',
                 headers: {
@@ -223,34 +281,84 @@
             
             const data = await response.json();
             
+            if (!response.ok) {
+                throw new Error(data.error || 'Error analyzing email');
+            }
+            
             if (data.error) {
                 resultDiv.className = 'alert alert-danger fade-in';
                 resultDiv.textContent = data.error;
             } else {
+                // Calculate risk level
+                const avgConfidence = (data.confidence.random_forest + data.confidence.naive_bayes) / 2;
+                let riskLevel = 'low';
+                let riskClass = 'risk-low';
+                if (avgConfidence > 0.7) {
+                    riskLevel = 'high';
+                    riskClass = 'risk-high';
+                } else if (avgConfidence > 0.4) {
+                    riskLevel = 'medium';
+                    riskClass = 'risk-medium';
+                }
+
                 // Show prediction message
                 let predMsg = data.prediction === 'phishing'
                     ? '<span style="color:var(--danger-color);font-weight:bold;">⚠️ This email is PHISHING</span>'
                     : '<span style="color:var(--success-color);font-weight:bold;">✅ This email is LEGITIMATE</span>';
+                
                 resultDiv.className = `alert alert-${data.prediction === 'phishing' ? 'danger' : 'success'} fade-in`;
                 resultDiv.innerHTML = `
                     <div class="prediction-box">
-                        <div class="mb-4" style="font-size:1.5em;text-align:center;">${predMsg}</div>
-                        <div class="confidence-boxes" style="display:flex;justify-content:space-around;margin:20px 0;">
-                            <div class="confidence-box" style="width:30%;">
+                        <h3 style="text-align:center;margin-bottom:20px;">${predMsg}</h3>
+                        <div class="risk-level ${riskClass}">
+                            Risk Level: ${riskLevel.toUpperCase()}
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;">
+                            <div class="confidence-box">
                                 <div style="font-weight:bold;color:var(--text-color);">Random Forest</div>
-                                <div style="font-size:1.2em;color:var(--primary-color);">${(data.confidence.random_forest * 100).toFixed(2)}%</div>
+                                <div style="font-size:0.9em;color:var(--text-color);margin-top:5px;">
+                                    Model Accuracy: ${(data.model_accuracies.random_forest * 100).toFixed(2)}%
+                                </div>
                             </div>
-                            <div class="confidence-box" style="width:30%;">
+                            
+                            <div class="confidence-box">
                                 <div style="font-weight:bold;color:var(--text-color);">Naive Bayes</div>
-                                <div style="font-size:1.2em;color:var(--primary-color);">${(data.confidence.naive_bayes * 100).toFixed(2)}%</div>
+                                <div style="font-size:0.9em;color:var(--text-color);margin-top:5px;">
+                                    Model Accuracy: ${(data.model_accuracies.naive_bayes * 100).toFixed(2)}%
+                                </div>
                             </div>
-                            <div class="confidence-box" style="width:30%;">
-                                <div style="font-weight:bold;color:var(--text-color);">Weighted Score</div>
-                                <div style="font-size:1.2em;color:var(--primary-color);">${(data.confidence.weighted_score * 100).toFixed(2)}%</div>
+                            <div style="text-align:center;margin-top:20px;padding:15px;background:var(--light-bg);border-radius:10px;">
+                                <div style="font-weight:bold;color:var(--text-color);">Overall Model Accuracy</div>
+                                <div style="font-size:1.2em;color:var(--primary-color);">
+                                    ${(((data.model_accuracies.random_forest + data.model_accuracies.naive_bayes) / 2) * 100).toFixed(2)}%
+                                </div>
+                                <div style="font-size:0.9em;color:var(--text-color);margin-top:5px;">
+                                    (Average of both models)
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Feature Analysis Accuracy -->
+                        <div style="margin-top:30px;padding:20px;background:var(--light-bg);border-radius:10px;">
+                            <h4 style="text-align:center;margin-bottom:20px;color:var(--text-color);">Feature Analysis Accuracy</h4>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;">
+                                ${Object.entries(data.model_accuracies.feature_accuracy).map(([key, value]) => `
+                                    <div class="confidence-box">
+                                        <div style="font-weight:bold;color:var(--text-color);">${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                                        <div style="font-size:1.2em;color:var(--primary-color);">
+                                            ${(value * 100).toFixed(2)}%
+                                        </div>
+                                    </div>
+                                `).join('')}
+                                <div class="confidence-box" style="background:linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);">
+                                    <div style="font-weight:bold;color:var(--text-color);">Overall Feature Accuracy</div>
+                                    <div style="font-size:1.2em;color:var(--primary-color);">
+                                        ${(data.model_accuracies.overall_feature_accuracy * 100).toFixed(2)}%
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-
                     <div class="analysis-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;">
                         <!-- Text Analysis Box -->
                         <div class="analysis-box">
@@ -334,8 +442,12 @@
             resultDiv.style.display = 'block';
         } catch (error) {
             resultDiv.className = 'alert alert-danger fade-in';
-            resultDiv.textContent = 'Error analyzing email. Please try again.';
+            resultDiv.textContent = error.message || 'Error analyzing email. Please try again.';
             resultDiv.style.display = 'block';
+        } finally {
+            // Reset button state
+            submitButton.disabled = false;
+            buttonText.innerHTML = 'Analyze Email';
         }
     });
     </script>

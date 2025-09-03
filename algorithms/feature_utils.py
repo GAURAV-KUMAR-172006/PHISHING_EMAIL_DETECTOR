@@ -120,8 +120,44 @@ def extract_features(text):
         'has_currency_symbols': 1 if re.search(r'[$€£¥]', text) else 0
     }
     
-    # Add URL-specific features if URLs are present
+    # Header-aware features: sender-domain vs link-domain consistency and trust
+    sender_domain_match = re.search(r'^from:\s*([^\n]+)$', text, re.IGNORECASE | re.MULTILINE)
+    sender_domain_flag = 0
+    link_domain_flag = 0
+    sender_link_domain_match = 0
+    is_trusted_sender = 0
+    trusted_etld1 = {
+        'github.com', 'google.com', 'microsoft.com', 'apple.com', 'amazon.com', 'facebook.com', 'meta.com',
+        'stripe.com', 'paypal.com', 'adobe.com', 'slack.com', 'zoom.us', 'atlassian.com', 'jira.com', 'bitbucket.org',
+        'gitlab.com', 'cloudflare.com', 'dropbox.com', 'notion.so', 'openai.com', 'yahoo.com', 'outlook.com'
+    }
+
+    # Extract URLs early for domain checks
     urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', text)
+    primary_link_domain = None
+    if urls:
+        try:
+            ext_primary = tldextract.extract(urls[0])
+            primary_link_domain = f"{ext_primary.domain}.{ext_primary.suffix}" if ext_primary.suffix else ext_primary.domain
+            link_domain_flag = 1 if primary_link_domain else 0
+        except Exception:
+            primary_link_domain = None
+    # Extract sender domain from From: header
+    if sender_domain_match:
+        sender_field = sender_domain_match.group(1)
+        # Try to extract email within angle brackets or as-is
+        m = re.search(r'<([^>]+)>', sender_field)
+        email_addr = m.group(1) if m else sender_field.strip()
+        m2 = re.search(r'@([A-Za-z0-9.-]+)', email_addr)
+        if m2:
+            raw_domain = m2.group(1).lower()
+            ext_sender = tldextract.extract(raw_domain)
+            sender_etld1 = f"{ext_sender.domain}.{ext_sender.suffix}" if ext_sender.suffix else ext_sender.domain
+            sender_domain_flag = 1 if sender_etld1 else 0
+            if primary_link_domain and sender_etld1 == primary_link_domain:
+                sender_link_domain_match = 1
+            if sender_etld1 in trusted_etld1:
+                is_trusted_sender = 1
     if urls:
         url_features = [extract_url_features(url) for url in urls]
         for feature in url_features[0].keys():
@@ -131,6 +167,12 @@ def extract_features(text):
         default_url_features = extract_url_features('http://example.com')
         for feature in default_url_features.keys():
             features[f'url_{feature}'] = 0
+
+    # Inject header-aware numeric features (no strings to keep model pipelines stable)
+    features['sender_domain_present'] = sender_domain_flag
+    features['primary_link_domain_present'] = link_domain_flag
+    features['sender_link_domain_match'] = sender_link_domain_match
+    features['is_trusted_sender'] = is_trusted_sender
     
     # Convert boolean values to integers
     for key in features:

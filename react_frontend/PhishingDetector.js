@@ -20,14 +20,21 @@ function PhishingDetector() {
   };
 
   return (
-    <div style={{ maxWidth: 500, margin: '60px auto', background: '#fff', padding: 30, borderRadius: 8, boxShadow: '0 2px 8px #ccc' }}>
-      <h2>Phishing Email Detector</h2>
+    <div style={{ maxWidth: 600, margin: '60px auto', background: 'rgba(17, 24, 39, 0.7)', padding: 30, borderRadius: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.35)', color: '#e5e7eb', border: '1px solid rgba(148, 163, 184, 0.15)', backdropFilter: 'blur(10px)' }}>
+      <h2 style={{
+        textAlign: 'center',
+        marginBottom: 20,
+        fontWeight: 700,
+        backgroundImage: 'linear-gradient(45deg, #7c3aed, #ec4899)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent'
+      }}>Phishing Email Detector</h2>
       <form onSubmit={handleSubmit}>
-        <label>Enter Email Text:</label><br />
-        <textarea value={email} onChange={e => setEmail(e.target.value)} required style={{ width: '100%', height: 120, marginBottom: 15 }} />
-        <button type="submit" style={{ width: '100%', padding: 10, background: '#007bff', color: '#fff', border: 'none', borderRadius: 4, fontSize: 16 }}>Analyze Email</button>
+        <label style={{ color: '#e5e7eb', fontWeight: 600 }}>Enter Email Text:</label><br />
+        <textarea value={email} onChange={e => setEmail(e.target.value)} required style={{ width: '100%', height: 140, marginBottom: 16, padding: 14, background: 'rgba(2, 6, 23, 0.5)', color: '#e5e7eb', border: '1px solid rgba(148, 163, 184, 0.15)', borderRadius: 10 }} />
+        <button type="submit" style={{ width: '100%', padding: 14, backgroundImage: 'linear-gradient(90deg, #7c3aed, #ec4899)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 18, fontWeight: 700, boxShadow: '0 10px 30px rgba(124, 58, 237, 0.25)', cursor: 'pointer' }}>Analyze Email</button>
       </form>
-      <div style={{ marginTop: 20, textAlign: 'center', fontSize: 18 }}>
+      <div style={{ marginTop: 20, textAlign: 'center', fontSize: 18, color: '#e5e7eb' }}>
         {loading ? 'Analyzing...' : result}
       </div>
     </div>
